@@ -1,3 +1,7 @@
+// Package polyval implements POLYVAL per RFC 8542.
+//
+// [rfc8542]: https://datatracker.ietf.org/doc/html/rfc8452#section-3
+// [gueron]: https://crypto.stanford.edu/RealWorldCrypto/slides/gueron.pdf
 package polyval
 
 import (
@@ -9,7 +13,7 @@ import (
 
 // New creates a Polyval.
 //
-// The
+// The key must be exactly 16 bytes long.
 func New(key []byte) (*Polyval, error) {
 	if len(key) != 16 {
 		return nil, fmt.Errorf("invalid key size: %d", len(key))
@@ -33,7 +37,7 @@ func New(key []byte) (*Polyval, error) {
 // XOR. Multiplication is polynomial multiplication reduced
 // modulo the polynomial.
 //
-// Fo rmore information, see https://datatracker.ietf.org/doc/html/rfc8452#section-3
+// For more information, see [rfc8542].
 type Polyval struct {
 	h fieldElement
 	y fieldElement
@@ -120,8 +124,7 @@ func (x fieldElement) mul(y fieldElement) fieldElement {
 	// Use Shay Gueron's fast montogmery reduction to reduce it
 	// modulo x^128 + x^127 + x^126 + x^121 + 1.
 	//
-	// See https://crypto.stanford.edu/RealWorldCrypto/slides/gueron.pdf
-	// page 20.
+	// See [gueron] page 20.
 	h1, h0 := ctmul(x.hi, y.hi)           // H
 	l1, l0 := ctmul(x.lo, y.lo)           // L
 	m1, m0 := ctmul(x.hi^x.lo, y.hi^y.lo) // M
