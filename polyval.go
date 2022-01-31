@@ -1,27 +1,16 @@
-// Package polyval implements POLYVAL per RFC 8542.
+// Package polyval implements POLYVAL per RFC 8452.
 //
-// [rfc8542]: https://datatracker.ietf.org/doc/html/rfc8452#section-3
+// [rfc8452]: https://datatracker.ietf.org/doc/html/rfc8452#section-3
 // [gueron]: https://crypto.stanford.edu/RealWorldCrypto/slides/gueron.pdf
 package polyval
 
 import (
+	"encoding"
 	"encoding/binary"
 	"fmt"
 )
 
 //go:generate go run github.com/ericlagergren/polyval/internal/cmd/gen ctmul
-
-// New creates a Polyval.
-//
-// The key must be exactly 16 bytes long.
-func New(key []byte) (*Polyval, error) {
-	if len(key) != 16 {
-		return nil, fmt.Errorf("invalid key size: %d", len(key))
-	}
-	var p Polyval
-	p.h.setBytes(key)
-	return &p, nil
-}
 
 // Polyval is an implementation of POLYVAL.
 //
@@ -37,10 +26,60 @@ func New(key []byte) (*Polyval, error) {
 // XOR. Multiplication is polynomial multiplication reduced
 // modulo the polynomial.
 //
-// For more information, see [rfc8542].
+// For more information on POLYVAL, see [rfc8452].
 type Polyval struct {
+	// Make Polyval non-comparable to prevent accidental
+	// non-constant time comparisons.
+	_ [0]func()
+	// h is the hash key.
 	h fieldElement
+	// y is the running state.
 	y fieldElement
+}
+
+var (
+	_ encoding.BinaryMarshaler
+	_ encoding.BinaryUnmarshaler
+)
+
+// New creates a Polyval.
+//
+// The key must be exactly 16 bytes long.
+func New(key []byte) (*Polyval, error) {
+	var p Polyval
+	p.init(key)
+	return &p, nil
+}
+
+// init initializes the Polyval.
+//
+// The key must be exactly 16 bytes long.
+//
+// TODO(eric): maybe export this? It's nice because it would
+// allow doing something like
+//
+//    type T struct {
+//        p Polyval
+//    }
+//
+// without having to abuse UnmarshalBinary to initialize p.
+// However, I don't want to encourage people to do that because
+// it makes it *much* easier to forget to initialize the Polyval
+// with a key and use an all-zero key.
+//
+// An alternative could be some sort of "init" field, but then
+// each use of Polyval needs to check that field. Or, perhaps
+// the key could be []byte and then using Polyval without
+// initializing it would panic when we try to convert the key to
+// a fieldElement. But that's kinda gross: the user would get
+// a confusing stack trace.
+func (p *Polyval) init(key []byte) error {
+	if len(key) != 16 {
+		return fmt.Errorf("invalid key size: %d", len(key))
+	}
+	*p = Polyval{}
+	p.h.setBytes(key)
+	return nil
 }
 
 // Size returns the size of a POLYVAL digest.
@@ -53,7 +92,7 @@ func (p *Polyval) BlockSize() int {
 	return 16
 }
 
-// Reset clears the hash to its original state.
+// Reset sets the hash to its original state.
 func (p *Polyval) Reset() {
 	p.y = fieldElement{}
 }
@@ -80,6 +119,32 @@ func (p *Polyval) Sum(b []byte) []byte {
 	binary.LittleEndian.PutUint64(buf[0:8], p.y.lo)
 	binary.LittleEndian.PutUint64(buf[8:16], p.y.hi)
 	return append(b, buf...)
+}
+
+// MarshalBinary implements BinaryMarshaler.
+//
+// It does not return an error.
+func (p *Polyval) MarshalBinary() ([]byte, error) {
+	buf := make([]byte, 16*2)
+	binary.LittleEndian.PutUint64(buf[0:8], p.h.lo)
+	binary.LittleEndian.PutUint64(buf[8:16], p.h.hi)
+	binary.LittleEndian.PutUint64(buf[16:24], p.y.lo)
+	binary.LittleEndian.PutUint64(buf[24:32], p.y.hi)
+	return buf, nil
+}
+
+// Unmarshalbinary implements BinaryUnmarshaler.
+//
+// data must be exactly 32 bytes.
+func (p *Polyval) UnmarshalBinary(data []byte) error {
+	if len(data) != 16*2 {
+		return fmt.Errorf("invalid data size: %d", len(data))
+	}
+	p.h.lo = binary.LittleEndian.Uint64(data[0:8])
+	p.h.hi = binary.LittleEndian.Uint64(data[8:16])
+	p.y.lo = binary.LittleEndian.Uint64(data[16:24])
+	p.y.hi = binary.LittleEndian.Uint64(data[24:32])
+	return nil
 }
 
 // fieldElement is a little-endian element in GF(2^128).

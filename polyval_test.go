@@ -136,6 +136,38 @@ func TestPolyvalVectors(t *testing.T) {
 	}
 }
 
+// TestMarshal tests Polyval's MarshalBinary and UnmarshalBinary
+// methods.
+func TestMarshal(t *testing.T) {
+	h, _ := New(make([]byte, 16))
+	block := make([]byte, 16)
+	seed := uint64(time.Now().UnixNano())
+	rng := rand.New(rand.NewSource(seed))
+	for i := 0; i < 500; i++ {
+		rng.Read(block)
+
+		// Save the current digest and state.
+		prevSum := h.Sum(nil)
+		prev, _ := h.MarshalBinary()
+
+		// Update the state and save the digest.
+		h.Update(block)
+		curSum := h.Sum(nil)
+
+		// Read back the first state and check that we get the
+		// same results.
+		var h2 Polyval
+		h2.UnmarshalBinary(prev)
+		if got := h2.Sum(nil); !bytes.Equal(got, prevSum) {
+			t.Fatalf("#%d: exepected %x, got %d", i, prevSum, got)
+		}
+		h2.Update(block)
+		if got := h2.Sum(nil); !bytes.Equal(got, curSum) {
+			t.Fatalf("#%d: exepected %x, got %d", i, curSum, got)
+		}
+	}
+}
+
 // TestDoubleRFCVectors tests double over the set of vectors from
 // RFC 8452.
 //
