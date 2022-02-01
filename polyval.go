@@ -5,8 +5,10 @@
 package polyval
 
 import (
+	"crypto/subtle"
 	"encoding"
 	"encoding/binary"
+	"errors"
 	"fmt"
 )
 
@@ -35,6 +37,8 @@ type Polyval struct {
 	h fieldElement
 	// y is the running state.
 	y fieldElement
+	// pow is a pre-computed table of powers of h.
+	pow [8]fieldElement
 }
 
 var (
@@ -46,40 +50,25 @@ var (
 //
 // The key must be exactly 16 bytes long.
 func New(key []byte) (*Polyval, error) {
-	var p Polyval
-	p.init(key)
-	return &p, nil
-}
-
-// init initializes the Polyval.
-//
-// The key must be exactly 16 bytes long.
-//
-// TODO(eric): maybe export this? It's nice because it would
-// allow doing something like
-//
-//    type T struct {
-//        p Polyval
-//    }
-//
-// without having to abuse UnmarshalBinary to initialize p.
-// However, I don't want to encourage people to do that because
-// it makes it *much* easier to forget to initialize the Polyval
-// with a key and use an all-zero key.
-//
-// An alternative could be some sort of "init" field, but then
-// each use of Polyval needs to check that field. Or, perhaps
-// the key could be []byte and then using Polyval without
-// initializing it would panic when we try to convert the key to
-// a fieldElement. But that's kinda gross: the user would get
-// a confusing stack trace.
-func (p *Polyval) init(key []byte) error {
 	if len(key) != 16 {
-		return fmt.Errorf("invalid key size: %d", len(key))
+		return nil, fmt.Errorf("invalid key size: %d", len(key))
 	}
-	*p = Polyval{}
+	var v byte
+	for i := 0; i < len(key); i++ {
+		v ^= key[i]
+	}
+	if subtle.ConstantTimeByteEq(v, 0) == 1 {
+		return nil, errors.New("the zero key is invalid")
+	}
+
+	var p Polyval
 	p.h.setBytes(key)
-	return nil
+	p.pow[len(p.pow)-1] = p.h
+	for i := len(p.pow) - 2; i >= 0; i-- {
+		p.pow[i] = p.h
+		polymul(&p.pow[i], &p.pow[i+1])
+	}
+	return &p, nil
 }
 
 // Size returns the size of a POLYVAL digest.
@@ -97,18 +86,14 @@ func (p *Polyval) Reset() {
 	p.y = fieldElement{}
 }
 
-// Update writes a single block to the running hash.
+// Update writes one or more blocks to the running hash.
 //
 // If len(block) != BlockSize, Update will panic.
-func (p *Polyval) Update(block []byte) {
-	if len(block) != 16 {
-		panic("polyval: invalid block length")
+func (p *Polyval) Update(blocks []byte) {
+	if len(blocks)%16 != 0 {
+		panic("polyval: invalid input length")
 	}
-	if haveAsm {
-		polymul(&p.y, &p.h, &block[0])
-	} else {
-		polymulGeneric(&p.y, &p.h, block)
-	}
+	polymulBlocks(&p.y, &p.pow, blocks)
 }
 
 // Sum appends the current hash to b and returns the resulting
@@ -126,11 +111,15 @@ func (p *Polyval) Sum(b []byte) []byte {
 //
 // It does not return an error.
 func (p *Polyval) MarshalBinary() ([]byte, error) {
-	buf := make([]byte, 16*2)
+	buf := make([]byte, 16*(2+len(p.pow)))
 	binary.LittleEndian.PutUint64(buf[0:8], p.h.lo)
 	binary.LittleEndian.PutUint64(buf[8:16], p.h.hi)
 	binary.LittleEndian.PutUint64(buf[16:24], p.y.lo)
 	binary.LittleEndian.PutUint64(buf[24:32], p.y.hi)
+	for i, x := range p.pow {
+		binary.LittleEndian.PutUint64(buf[32+(i*16):], x.lo)
+		binary.LittleEndian.PutUint64(buf[40+(i*16):], x.hi)
+	}
 	return buf, nil
 }
 
@@ -138,45 +127,23 @@ func (p *Polyval) MarshalBinary() ([]byte, error) {
 //
 // data must be exactly 32 bytes.
 func (p *Polyval) UnmarshalBinary(data []byte) error {
-	if len(data) != 16*2 {
+	if len(data) != 16*(2+len(p.pow)) {
 		return fmt.Errorf("invalid data size: %d", len(data))
 	}
 	p.h.lo = binary.LittleEndian.Uint64(data[0:8])
 	p.h.hi = binary.LittleEndian.Uint64(data[8:16])
 	p.y.lo = binary.LittleEndian.Uint64(data[16:24])
 	p.y.hi = binary.LittleEndian.Uint64(data[24:32])
+	for i, x := range p.pow {
+		x.lo = binary.LittleEndian.Uint64(data[32+(i*16):])
+		x.hi = binary.LittleEndian.Uint64(data[40+(i*16):])
+		p.pow[i] = x
+	}
 	return nil
 }
 
-func polymulGeneric(acc, key *fieldElement, input []byte) {
-	var x fieldElement
-	x.setBytes(input)
-	// y = (y+x)*H
-	*acc = key.mul(acc.xor(x))
-}
-
-// fieldElement is a little-endian element in GF(2^128).
-type fieldElement struct {
-	lo, hi uint64
-}
-
-func (f fieldElement) String() string {
-	return fmt.Sprintf("%#0.16x%0.16x", f.hi, f.lo)
-}
-
-// setBytes sets z to the little-endian element p.
-func (z *fieldElement) setBytes(p []byte) {
-	z.lo = binary.LittleEndian.Uint64(p[0:8])
-	z.hi = binary.LittleEndian.Uint64(p[8:16])
-}
-
-func (x fieldElement) xor(y fieldElement) fieldElement {
-	return fieldElement{hi: x.hi ^ y.hi, lo: x.lo ^ y.lo}
-}
-
-// mul multiplies the two field elements in GF(2^128) using the
-// polynomial x^128 + x^7 + x^2 + x + 1.
-func (x fieldElement) mul(y fieldElement) fieldElement {
+func polymulGeneric(acc, key *fieldElement) {
+	x, y := key, acc
 	// We perform schoolbook multiplication of x and y:
 	//
 	// (x1,x0)*(y1,y0) = (x1*y1) + (x1*y0 + x0*y1) + (x0*y0)
@@ -226,7 +193,80 @@ func (x fieldElement) mul(y fieldElement) fieldElement {
 	d0 := b1 ^ c0
 
 	// Output: [D1 ⊕ X3 : D0 ⊕ X2]
-	return fieldElement{hi: d1 ^ x3, lo: d0 ^ x2}
+	y.hi = d1 ^ x3
+	y.lo = d0 ^ x2
+}
+
+func polymulBlocksGeneric(acc *fieldElement, pow *[8]fieldElement, blocks []byte) {
+	for (len(blocks)/16)%8 != 0 {
+		acc.lo ^= binary.LittleEndian.Uint64(blocks[0:8])
+		acc.hi ^= binary.LittleEndian.Uint64(blocks[8:16])
+		polymulGeneric(acc, &pow[len(pow)-1])
+		blocks = blocks[16:]
+	}
+
+	const (
+		wide = 16 * len(pow)
+	)
+	for len(blocks) >= wide {
+		var h1, h0, l1, l0, m1, m0 uint64
+		for i, x := range pow {
+			var y fieldElement
+			y.setBytes(blocks[:16])
+			if i == 0 {
+				y.lo ^= acc.lo
+				y.hi ^= acc.hi
+			}
+
+			t1, t0 := ctmul(x.hi, y.hi)
+			h1 ^= t1
+			h0 ^= t0
+
+			t1, t0 = ctmul(x.lo, y.lo)
+			l1 ^= t1
+			l0 ^= t0
+
+			t1, t0 = ctmul(x.hi^x.lo, y.hi^y.lo)
+			m1 ^= t1
+			m0 ^= t0
+
+			blocks = blocks[16:]
+		}
+
+		x0 := l0
+		x1 := l1 ^ m0 ^ h0 ^ l0
+		x2 := h0 ^ m1 ^ h1 ^ l1
+		x3 := h1
+
+		const (
+			poly = 0xc200000000000000
+		)
+		a1, a0 := ctmul(x0, poly)
+		b1 := x0 ^ a1
+		b0 := x1 ^ a0
+
+		c1, c0 := ctmul(b0, poly)
+		d1 := b0 ^ c1
+		d0 := b1 ^ c0
+
+		acc.hi = d1 ^ x3
+		acc.lo = d0 ^ x2
+	}
+}
+
+// fieldElement is a little-endian element in GF(2^128).
+type fieldElement struct {
+	lo, hi uint64
+}
+
+func (f fieldElement) String() string {
+	return fmt.Sprintf("%#0.16x%0.16x", f.hi, f.lo)
+}
+
+// setBytes sets z to the little-endian element p.
+func (z *fieldElement) setBytes(p []byte) {
+	z.lo = binary.LittleEndian.Uint64(p[0:8])
+	z.hi = binary.LittleEndian.Uint64(p[8:16])
 }
 
 // mulx doubles x in GF(2^128).

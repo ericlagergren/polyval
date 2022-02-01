@@ -68,20 +68,62 @@ func TestPolyvalRFCVectors(t *testing.T) {
 			r: unhex("f7a3b47b846119fae5b7866cf5e5b77e"),
 		},
 	} {
+		blocks := make([]byte, 0, 16*len(tc.X))
+
 		g, _ := New(tc.H) // generic
 		p, _ := New(tc.H) // specialized
 		for _, x := range tc.X {
 			p.Update(x)
-			polymulGeneric(&g.y, &g.h, x)
+			polymulBlocksGeneric(&g.y, &g.pow, x)
+
+			blocks = append(blocks, x...)
 		}
 		want := tc.r
-		got := p.Sum(nil)
-		if !bytes.Equal(got, want) {
+
+		if got := p.Sum(nil); !bytes.Equal(got, want) {
 			t.Fatalf("#%d: expected %x, got %x", i, want, got)
 		}
-		got = g.Sum(nil)
-		if !bytes.Equal(got, want) {
+		if got := g.Sum(nil); !bytes.Equal(got, want) {
 			t.Fatalf("#%d: expected %x, got %x", i, want, got)
+		}
+
+		p.Reset()
+		p.Update(blocks)
+		if got := p.Sum(nil); !bytes.Equal(got, want) {
+			t.Fatalf("#%d: expected %x, got %x", i, want, got)
+		}
+
+		g.Reset()
+		polymulBlocksGeneric(&g.y, &g.pow, blocks)
+		if got := g.Sum(nil); !bytes.Equal(got, want) {
+			t.Fatalf("#%d: expected %x, got %x", i, want, got)
+		}
+	}
+}
+
+// TestMultiBlockUpdate is a quick test to check that single vs
+// multi-block Update calls are equivalent.
+func TestMultiBlockUpdate(t *testing.T) {
+	key := make([]byte, 16)
+	key[0] = 1
+	w, _ := New(key)
+	s, _ := New(key)
+
+	seed := uint64(time.Now().UnixNano())
+	rng := rand.New(rand.NewSource(seed))
+	buf := make([]byte, 224*67)
+	rng.Read(buf)
+
+	var dgw, dgs []byte
+	for i := 16; i < len(buf); i += 16 {
+		w.Update(buf[:i])
+		for b := buf; len(b) > 0; b = b[16:] {
+			s.Update(b[:16])
+		}
+		w.Sum(dgw[:0])
+		s.Sum(dgs[:0])
+		if !bytes.Equal(dgw, dgs) {
+			t.Fatalf("mismatch: %x vs %x", dgw, dgs)
 		}
 	}
 }
@@ -128,20 +170,19 @@ func TestPolyvalVectors(t *testing.T) {
 		key := unhex(v.Input.Key)
 		g, _ := New(key) // generic
 		p, _ := New(key) // specialized
-		msg := unhex(v.Input.Message)
-		for len(msg) > 0 {
-			p.Update(msg[0:16])
-			polymulGeneric(&g.y, &g.h, msg[0:16])
-			msg = msg[16:]
+
+		blocks := unhex(v.Input.Message)
+		if len(blocks) > 0 {
+			p.Update(blocks)
+			polymulBlocksGeneric(&g.y, &g.pow, blocks)
 		}
+
 		want := unhex(v.Hash)
-		got := p.Sum(nil)
-		if !bytes.Equal(want, got) {
+		if got := p.Sum(nil); !bytes.Equal(want, got) {
 			t.Fatalf("#%d: (%s): expected %x, got %x",
 				i, v.Description, want, got)
 		}
-		got = g.Sum(nil)
-		if !bytes.Equal(got, want) {
+		if got := g.Sum(nil); !bytes.Equal(got, want) {
 			t.Fatalf("#%d: (%s): expected %x, got %x",
 				i, v.Description, want, got)
 		}
@@ -151,19 +192,21 @@ func TestPolyvalVectors(t *testing.T) {
 // TestMarshal tests Polyval's MarshalBinary and UnmarshalBinary
 // methods.
 func TestMarshal(t *testing.T) {
-	h, _ := New(make([]byte, 16))
-	block := make([]byte, 16)
+	key := make([]byte, 16)
+	key[0] = 1
+	h, _ := New(key)
+	blocks := make([]byte, 224)
 	seed := uint64(time.Now().UnixNano())
 	rng := rand.New(rand.NewSource(seed))
-	for i := 0; i < 500; i++ {
-		rng.Read(block)
+	for i := 0; i < 5000; i++ {
+		rng.Read(blocks)
 
 		// Save the current digest and state.
 		prevSum := h.Sum(nil)
 		prev, _ := h.MarshalBinary()
 
 		// Update the state and save the digest.
-		h.Update(block)
+		h.Update(blocks)
 		curSum := h.Sum(nil)
 
 		// Read back the first state and check that we get the
@@ -171,11 +214,11 @@ func TestMarshal(t *testing.T) {
 		var h2 Polyval
 		h2.UnmarshalBinary(prev)
 		if got := h2.Sum(nil); !bytes.Equal(got, prevSum) {
-			t.Fatalf("#%d: exepected %x, got %d", i, prevSum, got)
+			t.Fatalf("#%d: exepected %x, got %x", i, prevSum, got)
 		}
-		h2.Update(block)
+		h2.Update(blocks)
 		if got := h2.Sum(nil); !bytes.Equal(got, curSum) {
-			t.Fatalf("#%d: exepected %x, got %d", i, curSum, got)
+			t.Fatalf("#%d: exepected %x, got %x", i, curSum, got)
 		}
 	}
 }
@@ -367,12 +410,54 @@ func BenchmarkDouble(b *testing.B) {
 	elemSink = x
 }
 
-func BenchmarkPolyval(b *testing.B) {
-	b.SetBytes(16)
+func BenchmarkPolyval_1(b *testing.B) {
+	benchmarkPolyval(b, 1)
+}
+
+func BenchmarkPolyval_4(b *testing.B) {
+	benchmarkPolyval(b, 4)
+}
+
+func BenchmarkPolyval_8(b *testing.B) {
+	benchmarkPolyval(b, 8)
+}
+
+func BenchmarkPolyval_16(b *testing.B) {
+	benchmarkPolyval(b, 16)
+}
+
+func benchmarkPolyval(b *testing.B, nblocks int) {
+	b.SetBytes(int64(nblocks) * 16)
 	p, _ := New(unhex("01000000000000000000000000000000"))
-	x := make([]byte, p.BlockSize())
+	x := make([]byte, nblocks*p.BlockSize())
 	for i := 0; i < b.N; i++ {
 		p.Update(x)
+	}
+	byteSink = p.Sum(nil)
+}
+
+func BenchmarkPolyvayGeneric_1(b *testing.B) {
+	benchmarkPolyvalGeneric(b, 1)
+}
+
+func BenchmarkPolyvayGeneric_4(b *testing.B) {
+	benchmarkPolyvalGeneric(b, 4)
+}
+
+func BenchmarkPolyvayGeneric_8(b *testing.B) {
+	benchmarkPolyvalGeneric(b, 8)
+}
+
+func BenchmarkPolyvayGeneric_16(b *testing.B) {
+	benchmarkPolyvalGeneric(b, 16)
+}
+
+func benchmarkPolyvalGeneric(b *testing.B, nblocks int) {
+	p, _ := New(unhex("01000000000000000000000000000000"))
+	x := make([]byte, nblocks*p.BlockSize())
+	b.SetBytes(int64(len(x)))
+	for i := 0; i < b.N; i++ {
+		polymulBlocksGeneric(&p.y, &p.pow, x)
 	}
 	byteSink = p.Sum(nil)
 }
