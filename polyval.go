@@ -97,17 +97,18 @@ func (p *Polyval) Reset() {
 	p.y = fieldElement{}
 }
 
-// Update writes a block to the running hash.
+// Update writes a single block to the running hash.
 //
 // If len(block) != BlockSize, Update will panic.
 func (p *Polyval) Update(block []byte) {
 	if len(block) != 16 {
 		panic("polyval: invalid block length")
 	}
-	var x fieldElement
-	x.setBytes(block)
-	// y = (y+x)*H
-	p.y = p.y.xor(x).mul(p.h)
+	if haveAsm {
+		polymul(&p.y, &p.h, &block[0])
+	} else {
+		polymulGeneric(&p.y, &p.h, block)
+	}
 }
 
 // Sum appends the current hash to b and returns the resulting
@@ -147,9 +148,16 @@ func (p *Polyval) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
+func polymulGeneric(acc, key *fieldElement, input []byte) {
+	var x fieldElement
+	x.setBytes(input)
+	// y = (y+x)*H
+	*acc = key.mul(acc.xor(x))
+}
+
 // fieldElement is a little-endian element in GF(2^128).
 type fieldElement struct {
-	hi, lo uint64
+	lo, hi uint64
 }
 
 func (f fieldElement) String() string {
@@ -218,7 +226,7 @@ func (x fieldElement) mul(y fieldElement) fieldElement {
 	d0 := b1 ^ c0
 
 	// Output: [D1 ⊕ X3 : D0 ⊕ X2]
-	return fieldElement{d1 ^ x3, d0 ^ x2}
+	return fieldElement{hi: d1 ^ x3, lo: d0 ^ x2}
 }
 
 // mulx doubles x in GF(2^128).

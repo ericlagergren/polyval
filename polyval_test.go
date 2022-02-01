@@ -46,13 +46,13 @@ func TestCtmulCommutative(t *testing.T) {
 // RFC 8452.
 func TestPolyvalRFCVectors(t *testing.T) {
 	for i, tc := range []struct {
-		H fieldElement
+		H []byte
 		X [][]byte
 		r []byte
 	}{
 		// POLYVAL(H, X_1)
 		{
-			H: elem("25629347589242761d31f826ba4b757b"),
+			H: unhex("25629347589242761d31f826ba4b757b"),
 			X: [][]byte{
 				unhex("4f4f95668c83dfb6401762bb2d01a262"),
 			},
@@ -60,7 +60,7 @@ func TestPolyvalRFCVectors(t *testing.T) {
 		},
 		// POLYVAL(H, X_1, X_2)
 		{
-			H: elem("25629347589242761d31f826ba4b757b"),
+			H: unhex("25629347589242761d31f826ba4b757b"),
 			X: [][]byte{
 				unhex("4f4f95668c83dfb6401762bb2d01a262"),
 				unhex("d1a24ddd2721d006bbe45f20d3c9f362"),
@@ -68,14 +68,18 @@ func TestPolyvalRFCVectors(t *testing.T) {
 			r: unhex("f7a3b47b846119fae5b7866cf5e5b77e"),
 		},
 	} {
-		v := Polyval{
-			h: tc.H,
-		}
+		g, _ := New(tc.H) // generic
+		p, _ := New(tc.H) // specialized
 		for _, x := range tc.X {
-			v.Update(x)
+			p.Update(x)
+			polymulGeneric(&g.y, &g.h, x)
 		}
 		want := tc.r
-		got := v.Sum(nil)
+		got := p.Sum(nil)
+		if !bytes.Equal(got, want) {
+			t.Fatalf("#%d: expected %x, got %x", i, want, got)
+		}
+		got = g.Sum(nil)
 		if !bytes.Equal(got, want) {
 			t.Fatalf("#%d: expected %x, got %x", i, want, got)
 		}
@@ -121,15 +125,23 @@ func TestPolyvalVectors(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i, v := range vecs {
-		p, _ := New(unhex(v.Input.Key))
+		key := unhex(v.Input.Key)
+		g, _ := New(key) // generic
+		p, _ := New(key) // specialized
 		msg := unhex(v.Input.Message)
 		for len(msg) > 0 {
 			p.Update(msg[0:16])
+			polymulGeneric(&g.y, &g.h, msg[0:16])
 			msg = msg[16:]
 		}
 		want := unhex(v.Hash)
 		got := p.Sum(nil)
 		if !bytes.Equal(want, got) {
+			t.Fatalf("#%d: (%s): expected %x, got %x",
+				i, v.Description, want, got)
+		}
+		got = g.Sum(nil)
+		if !bytes.Equal(got, want) {
 			t.Fatalf("#%d: (%s): expected %x, got %x",
 				i, v.Description, want, got)
 		}
@@ -339,7 +351,21 @@ func TestDoubleRustVectors(t *testing.T) {
 	}
 }
 
-var sink []byte
+var (
+	byteSink []byte
+	elemSink fieldElement
+)
+
+func BenchmarkDouble(b *testing.B) {
+	x := fieldElement{
+		hi: rand.Uint64(),
+		lo: rand.Uint64(),
+	}
+	for i := 0; i < b.N; i++ {
+		x = x.double()
+	}
+	elemSink = x
+}
 
 func BenchmarkPolyval(b *testing.B) {
 	b.SetBytes(16)
@@ -348,5 +374,5 @@ func BenchmarkPolyval(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		p.Update(x)
 	}
-	sink = p.Sum(nil)
+	byteSink = p.Sum(nil)
 }
