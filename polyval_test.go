@@ -395,8 +395,9 @@ func TestDoubleRustVectors(t *testing.T) {
 }
 
 var (
-	byteSink []byte
-	elemSink fieldElement
+	byteSink  []byte
+	elemSink  fieldElement
+	ctmulSink uint64
 )
 
 func BenchmarkDouble(b *testing.B) {
@@ -460,4 +461,13 @@ func benchmarkPolyvalGeneric(b *testing.B, nblocks int) {
 		polymulBlocksGeneric(&p.y, &p.pow, x)
 	}
 	byteSink = p.Sum(nil)
+}
+
+func BenchmarkCtmul(b *testing.B) {
+	z1 := rand.Uint64()
+	z0 := rand.Uint64()
+	for i := 0; i < b.N; i++ {
+		z1, z0 = ctmul(z1, z0)
+	}
+	ctmulSink = z1 ^ z0
 }

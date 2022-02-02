@@ -1,3 +1,5 @@
+//go:build gc && !purego
+
 #include "textflag.h"
 
 // The following assembly is a literal translation of

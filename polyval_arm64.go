@@ -33,3 +33,7 @@ func polymulAsm(acc, key *fieldElement)
 
 //go:noescape
 func polymulBlocksAsm(acc *fieldElement, pow *[8]fieldElement, input *byte, nblocks int)
+
+func ctmul(x, y uint64) (z1, z0 uint64) {
+	return ctmulGeneric(x, y)
+}
