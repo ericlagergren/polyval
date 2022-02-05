@@ -5,4 +5,7 @@
 package polyval
 
 //go:noescape
-func ctmulAsm(z *fieldElement, x uint64, y uint64)
+func polymulAsm(acc *fieldElement, key *fieldElement)
+
+//go:noescape
+func polymulBlocksAsm(acc *fieldElement, pow *[8]fieldElement, input *byte, nblocks int)

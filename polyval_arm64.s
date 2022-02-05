@@ -30,7 +30,7 @@
 
 #define LOAD_POLY() VMOVQ $0xc200000000000000, $0xc200000000000000, poly
 
-// KARATSUBA_1_NO_XOR performs the first half of Karatsuba
+// KARATSUBA_1 performs the first half of Karatsuba
 // multiplication of |x| and |y|.
 //
 // The results are written directly to |H|, |L|, and |M|.
@@ -48,7 +48,7 @@
 //    H = x.hi*y.hi
 //
 #define KARATSUBA_1(x, y) \
-	VEXT    $8, y.B16, x.B16, tmp0.B16 \
+	VEXT    $8, y.B6, x.B16, tmp0.B16  \
 	VEOR    x.B16, tmp0.B16, tmp0.B16  \
 	VEXT    $8, y.B16, y.B16, tmp1.B16 \
 	VEOR    y.B16, tmp1.B16, tmp1.B16  \
@@ -56,7 +56,7 @@
 	VPMULL2 y.D2, x.D2, H.Q1           \
 	VPMULL  y.D1, x.D1, L.Q1
 
-// KARATSUBA_1 performs the first half of Karatsuba
+// KARATSUBA_1_XOR performs the first half of Karatsuba
 // multiplication of |x| and |y|.
 //
 // The results are XORed with |H|, |L|, and |M|.
@@ -102,7 +102,6 @@
 //               x2       x3
 //    x23 = {l1^h1^h0^m1, h1}
 //
-
 #define KARATSUBA_2() \
 	VEXT  $8, H.B16, L.B16, tmp2.B16    \
 	VEOR  tmp2.B16, M.B16, M.B16        \

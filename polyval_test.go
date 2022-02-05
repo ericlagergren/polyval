@@ -437,19 +437,19 @@ func benchmarkPolyval(b *testing.B, nblocks int) {
 	byteSink = p.Sum(nil)
 }
 
-func BenchmarkPolyvayGeneric_1(b *testing.B) {
+func BenchmarkPolyvalGeneric_1(b *testing.B) {
 	benchmarkPolyvalGeneric(b, 1)
 }
 
-func BenchmarkPolyvayGeneric_4(b *testing.B) {
+func BenchmarkPolyvalGeneric_4(b *testing.B) {
 	benchmarkPolyvalGeneric(b, 4)
 }
 
-func BenchmarkPolyvayGeneric_8(b *testing.B) {
+func BenchmarkPolyvalGeneric_8(b *testing.B) {
 	benchmarkPolyvalGeneric(b, 8)
 }
 
-func BenchmarkPolyvayGeneric_16(b *testing.B) {
+func BenchmarkPolyvalGeneric_16(b *testing.B) {
 	benchmarkPolyvalGeneric(b, 16)
 }
 
