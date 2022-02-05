@@ -1,3 +1,5 @@
+//go:build gc && !purego
+
 package polyval
 
 import (
@@ -7,18 +9,17 @@ import (
 var haveAsm = cpu.X86.HasPCLMULQDQ
 
 func polymul(acc, key *fieldElement) {
-	polymulGeneric(acc, key)
+	if haveAsm {
+		polymulAsm(acc, key)
+	} else {
+		polymulGeneric(acc, key)
+	}
 }
 
 func polymulBlocks(acc *fieldElement, pow *[8]fieldElement, blocks []byte) {
-	polymulBlocksGeneric(acc, pow, blocks)
-}
-
-func ctmul(x, y uint64) (z1, z0 uint64) {
 	if haveAsm {
-		var z fieldElement
-		ctmulAsm(&z, x, y)
-		return z.hi, z.lo
+		polymulBlocksAsm(acc, pow, &blocks[0], len(blocks)/16)
+	} else {
+		polymulBlocksGeneric(acc, pow, blocks)
 	}
-	return ctmulGeneric(x, y)
 }

@@ -161,40 +161,27 @@ func polymulGeneric(acc, key *fieldElement) {
 	//
 	// This gives us a 256-bit product, X.
 	//
-	// Use Shay Gueron's fast montogmery reduction to reduce it
-	// modulo x^128 + x^127 + x^126 + x^121 + 1.
+	// Use the "Shift-XOR reflected reduction" method to reduce
+	// it modulo x^128 + x^127 + x^126 + x^121 + 1.
 	//
-	// See [gueron] page 20.
+	// This is faster than Gueron's "Fast reduction ..." method
+	// because Go doesn't have CMUL/PMULL intrinsics.
+	//
+	// See [gueron] page 17-19.
 	h1, h0 := ctmul(x.hi, y.hi)           // H
 	l1, l0 := ctmul(x.lo, y.lo)           // L
 	m1, m0 := ctmul(x.hi^x.lo, y.hi^y.lo) // M
 
-	x0 := l0
-	x1 := l1 ^ m0 ^ h0 ^ l0
-	x2 := h0 ^ m1 ^ h1 ^ l1
-	x3 := h1
+	m0 ^= l0 ^ h0
+	m1 ^= l1 ^ h1
 
-	const (
-		poly = 0xc200000000000000
-	)
+	l1 ^= m0 ^ (l0 << 63) ^ (l0 << 62) ^ (l0 << 57)
+	h0 ^= l0 ^ (l0 >> 1) ^ (l0 >> 2) ^ (l0 >> 7)
+	h0 ^= m1 ^ (l1 << 63) ^ (l1 << 62) ^ (l1 << 57)
+	h1 ^= l1 ^ (l1 >> 1) ^ (l1 >> 2) ^ (l1 >> 7)
 
-	// [A1:A0] = X0 • 0xc200000000000000
-	a1, a0 := ctmul(x0, poly)
-
-	// [B1:B0] = [X0 ⊕ A1 : X1 ⊕ A0]
-	b1 := x0 ^ a1
-	b0 := x1 ^ a0
-
-	// [C1:C0] = B0 • 0xc200000000000000
-	c1, c0 := ctmul(b0, poly)
-
-	// [D1:D0] = [B0 ⊕ C1 : B1 ⊕ C0]
-	d1 := b0 ^ c1
-	d0 := b1 ^ c0
-
-	// Output: [D1 ⊕ X3 : D0 ⊕ X2]
-	y.hi = d1 ^ x3
-	y.lo = d0 ^ x2
+	y.hi = h1
+	y.lo = h0
 }
 
 func polymulBlocksGeneric(acc *fieldElement, pow *[8]fieldElement, blocks []byte) {
@@ -233,24 +220,16 @@ func polymulBlocksGeneric(acc *fieldElement, pow *[8]fieldElement, blocks []byte
 			blocks = blocks[16:]
 		}
 
-		x0 := l0
-		x1 := l1 ^ m0 ^ h0 ^ l0
-		x2 := h0 ^ m1 ^ h1 ^ l1
-		x3 := h1
+		m0 ^= l0 ^ h0
+		m1 ^= l1 ^ h1
 
-		const (
-			poly = 0xc200000000000000
-		)
-		a1, a0 := ctmul(x0, poly)
-		b1 := x0 ^ a1
-		b0 := x1 ^ a0
+		l1 ^= m0 ^ (l0 << 63) ^ (l0 << 62) ^ (l0 << 57)
+		h0 ^= l0 ^ (l0 >> 1) ^ (l0 >> 2) ^ (l0 >> 7)
+		h0 ^= m1 ^ (l1 << 63) ^ (l1 << 62) ^ (l1 << 57)
+		h1 ^= l1 ^ (l1 >> 1) ^ (l1 >> 2) ^ (l1 >> 7)
 
-		c1, c0 := ctmul(b0, poly)
-		d1 := b0 ^ c1
-		d0 := b1 ^ c0
-
-		acc.hi = d1 ^ x3
-		acc.lo = d0 ^ x2
+		acc.hi = h1
+		acc.lo = h0
 	}
 }
 
