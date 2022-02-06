@@ -427,6 +427,14 @@ func BenchmarkPolyval_16(b *testing.B) {
 	benchmarkPolyval(b, 16)
 }
 
+func BenchmarkPolyval_32(b *testing.B) {
+	benchmarkPolyval(b, 32)
+}
+
+func BenchmarkPolyval_64(b *testing.B) {
+	benchmarkPolyval(b, 64)
+}
+
 func benchmarkPolyval(b *testing.B, nblocks int) {
 	b.SetBytes(int64(nblocks) * 16)
 	p, _ := New(unhex("01000000000000000000000000000000"))

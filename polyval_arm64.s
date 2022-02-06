@@ -48,7 +48,7 @@
 //    H = x.hi*y.hi
 //
 #define KARATSUBA_1(x, y) \
-	VEXT    $8, y.B6, x.B16, tmp0.B16  \
+	VEXT    $8, y.B16, x.B16, tmp0.B16 \
 	VEOR    x.B16, tmp0.B16, tmp0.B16  \
 	VEXT    $8, y.B16, y.B16, tmp1.B16 \
 	VEOR    y.B16, tmp1.B16, tmp1.B16  \

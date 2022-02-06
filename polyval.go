@@ -1,5 +1,8 @@
 // Package polyval implements POLYVAL per RFC 8452.
 //
+// The universal hash function POLYVAL is the byte-wise reverse
+// of GHASH.
+//
 // [rfc8452]: https://datatracker.ietf.org/doc/html/rfc8452#section-3
 // [gueron]: https://crypto.stanford.edu/RealWorldCrypto/slides/gueron.pdf
 package polyval
@@ -37,7 +40,8 @@ type Polyval struct {
 	h fieldElement
 	// y is the running state.
 	y fieldElement
-	// pow is a pre-computed table of powers of h.
+	// pow is a pre-computed table of powers of h for writing
+	// groups of eight blocks.
 	pow [8]fieldElement
 }
 
@@ -49,6 +53,8 @@ var (
 // New creates a Polyval.
 //
 // The key must be exactly 16 bytes long.
+//
+// A zero key is invalid.
 func New(key []byte) (*Polyval, error) {
 	if len(key) != 16 {
 		return nil, fmt.Errorf("invalid key size: %d", len(key))
