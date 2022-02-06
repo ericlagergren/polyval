@@ -60,11 +60,8 @@ func New(key []byte) (*Polyval, error) {
 	if len(key) != 16 {
 		return nil, fmt.Errorf("invalid key size: %d", len(key))
 	}
-	var v byte
-	for i := 0; i < len(key); i++ {
-		v ^= key[i]
-	}
-	if subtle.ConstantTimeByteEq(v, 0) == 1 {
+	var zeroKey [16]byte
+	if subtle.ConstantTimeCompare(key, zeroKey[:]) == 1 {
 		return nil, errors.New("the zero key is invalid")
 	}
 

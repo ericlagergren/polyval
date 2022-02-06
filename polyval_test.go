@@ -189,6 +189,22 @@ func TestPolyvalVectors(t *testing.T) {
 	}
 }
 
+// TestZeroKey tests that New rejects zero keys.
+func TestZeroKey(t *testing.T) {
+	for _, tc := range []struct {
+		key []byte
+		ok  bool
+	}{
+		{key: make([]byte, 16), ok: false},
+		{key: unhex("9871b36289fee421dbfdba32716e774c"), ok: true},
+	} {
+		_, err := New(tc.key)
+		if (err == nil) != tc.ok {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	}
+}
+
 // TestMarshal tests Polyval's MarshalBinary and UnmarshalBinary
 // methods.
 func TestMarshal(t *testing.T) {
