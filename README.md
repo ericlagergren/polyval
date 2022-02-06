@@ -7,6 +7,12 @@ This module implements POLYVAL per [RFC 8452](https://datatracker.ietf.org/doc/h
 The universal hash function POLYVAL is the byte-wise reverse of
 GHASH.
 
+## Installation
+
+```bash
+go get github.com/ericlagergren/polymul@latest
+```
+
 ## Performance
 
 The x86-64 and ARMv8 assembly backends run at about 0.25 cycles

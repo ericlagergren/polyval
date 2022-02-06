@@ -20,7 +20,8 @@ import (
 // Polyval is an implementation of POLYVAL.
 //
 // It operates similar to the standard library's Hash interface,
-// but only accepts full blocks.
+// but only accepts full blocks. Callers should pad the input
+// accordingly.
 //
 // POLYVAL is similar to GHASH. It operates in GF(2^128) defined
 // by the irreducible polynomial
