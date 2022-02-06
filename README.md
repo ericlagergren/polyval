@@ -1,10 +1,6 @@
 # polyval
 
-<p align="center">
-<a href="https://pkg.go.dev/github.com/ericlagergren/polyval"><img src="https://pkg.go.dev/badge/github.com/ericlagergren/polyval.svg" alt="Go Reference"></a>
-</p>
-
-<p align="center">POLYVAL</p>
+[![Go Reference](https://pkg.go.dev/badge/github.com/ericlagergren/polyval.svg)](https://pkg.go.dev/github.com/ericlagergren/polyval)
 
 This module implements POLYVAL per [RFC 8452](https://datatracker.ietf.org/doc/html/rfc8452).
 
