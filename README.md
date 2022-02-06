@@ -10,7 +10,7 @@ GHASH.
 ## Installation
 
 ```bash
-go get github.com/ericlagergren/polymul@latest
+go get github.com/ericlagergren/polyval@latest
 ```
 
 ## Performance
