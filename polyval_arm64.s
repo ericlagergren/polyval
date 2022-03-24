@@ -103,6 +103,16 @@
 //    x23 = {l1^h1^h0^m1, h1}
 //
 #define KARATSUBA_2() \
+	VEXT $8, H.B16, L.B16, tmp2.B16   \
+	VEOR tmp2.B16, M.B16, M.B16       \
+	VEOR L.B16, H.B16, tmp2.B16       \
+	VEOR M.B16, tmp2.B16, tmp2.B16    \
+	VEXT $8, H.B16, H.B16, H.B16      \
+	VEXT $8, L.B16, L.B16, L.B16      \
+	VEXT $8, tmp2.B16, L.B16, x01.B16 \
+	VEXT $8, H.B16, tmp2.B16, x23.B16
+
+#define KARATSUBA_2_SHA3() \
 	VEXT  $8, H.B16, L.B16, tmp2.B16    \
 	VEOR  tmp2.B16, M.B16, M.B16        \
 	VEOR3 L.B16, H.B16, M.B16, tmp2.B16 \
@@ -122,6 +132,14 @@
 //    [D1:D0] = [B0 ⊕ C1 : B1 ⊕ C0]
 // Output: [D1 ⊕ X3 : D0 ⊕ X2]
 #define REDUCE() \
+	VPMULL  x01.D1, poly.D1, a.Q1   \
+	VEXT    $8, a.B16, a.B16, b.B16 \
+	VEOR    x01.B16, b.B16, b.B16   \
+	VPMULL2 b.D2, poly.D2, c.Q1     \
+	VEOR    c.B16, b.B16, d.B16     \
+	VEOR    x23.B16, d.B16, d.B16
+
+#define REDUCE_SHA3() \
 	VPMULL  x01.D1, poly.D1, a.Q1        \
 	VEXT    $8, a.B16, a.B16, b.B16      \
 	VEOR    x01.B16, b.B16, b.B16        \
@@ -132,6 +150,7 @@
 TEXT ·polymulAsm(SB), NOSPLIT, $0-16
 #define acc_ptr R0
 #define key_ptr R1
+#define have_sha3 R2
 
 #define x V13
 #define y V14
@@ -144,15 +163,27 @@ TEXT ·polymulAsm(SB), NOSPLIT, $0-16
 
 	LOAD_POLY()
 	KARATSUBA_1(x, y)
+
+	MOVBU ·haveSHA3(SB), have_sha3
+	CBNZ  have_sha3, reduce_sha3
+
+reduce:
 	KARATSUBA_2()
 	REDUCE()
+	B done
 
+reduce_sha3:
+	KARATSUBA_2_SHA3()
+	REDUCE_SHA3()
+
+done:
 	VST1 [d.B16], (acc_ptr)
 
 	RET
 
 #undef acc_ptr
 #undef key_ptr
+#undef have_sha3
 #undef x
 #undef y
 
@@ -238,6 +269,122 @@ wideLoop:
 
 	KARATSUBA_2()
 	REDUCE()
+
+	SUBS $1, nwide
+	BNE  wideLoop
+
+done:
+	VST1 [d.B16], (acc_ptr)
+
+	RET
+
+#undef acc_ptr
+#undef pow_ptr
+#undef input_ptr
+#undef remain
+#undef nwide
+#undef nsingle
+
+#undef m0
+#undef m1
+#undef m2
+#undef m3
+#undef m4
+#undef m5
+#undef m6
+#undef m7
+
+#undef h0
+#undef h1
+#undef h2
+#undef h3
+#undef h4
+#undef h5
+#undef h6
+#undef h7
+
+// func polymulBlocksAsmSHA3(acc *fieldElement, pow *[8]fieldElement, input *byte, nblocks int)
+TEXT ·polymulBlocksAsmSHA3(SB), NOSPLIT, $0-32
+#define acc_ptr R0
+#define pow_ptr R1
+#define input_ptr R2
+#define remain R3
+#define nwide R4
+#define nsingle R5
+
+#define m0 V16
+#define m1 V17
+#define m2 V18
+#define m3 V19
+#define m4 V20
+#define m5 V21
+#define m6 V22
+#define m7 V23
+
+#define h0 V24
+#define h1 V25
+#define h2 V26
+#define h3 V27
+#define h4 V28
+#define h5 V29
+#define h6 V30
+#define h7 V31
+
+	MOVD acc+0(FP), acc_ptr
+	MOVD pow+8(FP), pow_ptr
+	MOVD input+16(FP), input_ptr
+	MOVD nblocks+24(FP), remain
+
+	LOAD_POLY()
+	VLD1 (acc_ptr), [d.B16]
+
+	ANDS $7, remain, nsingle
+	BEQ  initWideLoop
+
+initSingleLoop:
+	MOVD pow+8(FP), pow_ptr
+	ADD  $128-16, pow_ptr
+	VLD1 (pow_ptr), [h7.B16]
+
+singleLoop:
+	VLD1.P 16(input_ptr), [m0.B16]
+
+	VEOR d.B16, m0.B16, m0.B16
+	KARATSUBA_1(m0, h7)
+	KARATSUBA_2_SHA3()
+	REDUCE_SHA3()
+
+	SUBS $1, nsingle
+	BNE  singleLoop
+
+initWideLoop:
+	ASR $3, remain, nwide
+	CBZ nwide, done
+
+	MOVD   pow+8(FP), pow_ptr
+	VLD1.P 64(pow_ptr), [h0.B16, h1.B16, h2.B16, h3.B16]
+	VLD1.P 64(pow_ptr), [h4.B16, h5.B16, h6.B16, h7.B16]
+
+wideLoop:
+	VLD1.P 64(input_ptr), [m0.B16, m1.B16, m2.B16, m3.B16]
+	VLD1.P 64(input_ptr), [m4.B16, m5.B16, m6.B16, m7.B16]
+
+	VEOR H.B16, H.B16, H.B16
+	VEOR L.B16, L.B16, L.B16
+	VEOR M.B16, M.B16, M.B16
+
+	KARATSUBA_1_XOR(m7, h7)
+	KARATSUBA_1_XOR(m6, h6)
+	KARATSUBA_1_XOR(m5, h5)
+	KARATSUBA_1_XOR(m4, h4)
+	KARATSUBA_1_XOR(m3, h3)
+	KARATSUBA_1_XOR(m2, h2)
+	KARATSUBA_1_XOR(m1, h1)
+	VEOR d.B16, m0.B16, m0.B16 // Fold in accumulator
+	KARATSUBA_1_XOR(m0, h0)
+
+	KARATSUBA_2_SHA3()
+	REDUCE_SHA3()
 
 	SUBS $1, nwide
 	BNE  wideLoop
