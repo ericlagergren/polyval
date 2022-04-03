@@ -92,7 +92,7 @@ func (p *Polyval) Reset() {
 
 // Update writes one or more blocks to the running hash.
 //
-// If len(block) != BlockSize, Update will panic.
+// If len(block) is not divisible by BlockSize, Update will panic.
 func (p *Polyval) Update(blocks []byte) {
 	if len(blocks)%16 != 0 {
 		panic("polyval: invalid input length")
