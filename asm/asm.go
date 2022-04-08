@@ -116,7 +116,7 @@ func karatsuba2(H, L, M VecVirtual) (x01, x23 VecVirtual) {
 //    [C1:C0] = B0 • 0xc200000000000000
 //    [D1:D0] = [B0 ⊕ C1 : B1 ⊕ C0]
 // Output: [D1 ⊕ X3 : D0 ⊕ X2]
-func reduce(v, x01, x23 VecVirtual) {
+func reduce(mask, v, x01, x23 VecVirtual) {
 	Comment("Montgomery reduce")
 	MOVOU(mask, v)
 	PCLMULQDQ(U8(0x00), x01, v)  // (A1, A0) = X0 * poly
@@ -130,10 +130,16 @@ func reduce(v, x01, x23 VecVirtual) {
 // polymul set z = x*y.
 //
 // It clobbers x.
-func polymul(z, x, y VecVirtual) {
+func polymul(mask, z, x, y VecVirtual) {
 	H, L, M := karatsuba1(x, y)
 	x01, x23 := karatsuba2(H, L, M)
-	reduce(z, x01, x23)
+	reduce(mask, z, x01, x23)
+}
+
+func loadMask() VecVirtual {
+	m := XMM()
+	MOVOU(mask, m)
+	return m
 }
 
 func declarePolymul() {
@@ -148,7 +154,7 @@ func declarePolymul() {
 	MOVOU(Mem{Base: key}, y)
 
 	z := XMM()
-	polymul(z, x, y)
+	polymul(loadMask(), z, x, y)
 	MOVOU(z, Mem{Base: acc})
 
 	RET()
@@ -162,6 +168,8 @@ func declarePolymulBlocks() {
 	pow := Mem{Base: Load(Param("pow"), GP64())}
 	input := Mem{Base: Load(Param("input"), GP64())}
 	nblocks := Load(Param("nblocks"), GP64())
+
+	mask := loadMask()
 
 	d := XMM()
 	MOVOU(acc, d)
@@ -181,7 +189,7 @@ func declarePolymulBlocks() {
 	msg := XMM()
 	MOVOU(input, msg)
 	PXOR(d, msg)
-	polymul(d, msg, key)
+	polymul(mask, d, msg, key)
 
 	ADDQ(U8(16), input.Base)
 	SUBQ(U8(1), nsingle)
@@ -215,7 +223,7 @@ func declarePolymulBlocks() {
 			PXOR(m, M)
 		}
 		x01, x23 := karatsuba2(H, L, M)
-		reduce(d, x01, x23)
+		reduce(mask, d, x01, x23)
 
 		ADDQ(U8(8*16), input.Base)
 		SUBQ(U8(1), nwide)
