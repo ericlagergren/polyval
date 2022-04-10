@@ -33,6 +33,13 @@ func polymulBlocks(acc *fieldElement, pow *[8]fieldElement, blocks []byte) {
 	}
 }
 
+func ctmul(x, y uint64) (z1, z0 uint64) {
+	if haveAsm {
+		return ctmulAsm(x, y)
+	}
+	return ctmulGeneric(x, y)
+}
+
 //go:noescape
 func polymulAsm(acc, key *fieldElement)
 
@@ -41,3 +48,6 @@ func polymulBlocksAsm(acc *fieldElement, pow *[8]fieldElement, input *byte, nblo
 
 //go:noescape
 func polymulBlocksAsmSHA3(acc *fieldElement, pow *[8]fieldElement, input *byte, nblocks int)
+
+//go:noescape
+func ctmulAsm(x, y uint64) (z1, z0 uint64)

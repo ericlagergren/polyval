@@ -4,7 +4,7 @@ package polyval
 
 import "math/bits"
 
-// ctmul returns the constant time 128-bit product of
+// ctmulGeneric returns the constant time 128-bit product of
 // x and y in GF(2^128).
 //
 // The idea comes from Thomas Pornin's constant-time blog post
@@ -13,7 +13,7 @@ import "math/bits"
 //
 // See https://www.bearssl.org/constanttime.html
 // See https://timtaubert.de/blog/2017/06/verified-binary-multiplication-for-ghash/
-func ctmul(x, y uint64) (z1, z0 uint64) {
+func ctmulGeneric(x, y uint64) (z1, z0 uint64) {
 	// Split both x and y into 5 words with four-bit holes.
 	x0 := x & 0x1084210842108421
 	y0 := y & 0x1084210842108421
