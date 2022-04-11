@@ -86,6 +86,9 @@ func TestPolyvalRFCVectors(t *testing.T) {
 		if got := g.Sum(nil); !bytes.Equal(got, want) {
 			t.Fatalf("#%d: expected %x, got %x", i, want, got)
 		}
+		if got := Sum(tc.H, blocks); !bytes.Equal(want, got[:]) {
+			t.Fatalf("#%d: expected %x, got %x", i, want, got[:])
+		}
 
 		p.Reset()
 		p.Update(blocks)
@@ -172,10 +175,8 @@ func TestPolyvalVectors(t *testing.T) {
 		p, _ := New(key) // specialized
 
 		blocks := unhex(v.Input.Message)
-		if len(blocks) > 0 {
-			p.Update(blocks)
-			polymulBlocksGeneric(&g.y, &g.pow, blocks)
-		}
+		p.Update(blocks)
+		polymulBlocksGeneric(&g.y, &g.pow, blocks)
 
 		want := unhex(v.Hash)
 		if got := p.Sum(nil); !bytes.Equal(want, got) {
@@ -183,6 +184,10 @@ func TestPolyvalVectors(t *testing.T) {
 				i, v.Description, want, got)
 		}
 		if got := g.Sum(nil); !bytes.Equal(got, want) {
+			t.Fatalf("#%d: (%s): expected %x, got %x",
+				i, v.Description, want, got)
+		}
+		if got := Sum(key, blocks); !bytes.Equal(want, got[:]) {
 			t.Fatalf("#%d: (%s): expected %x, got %x",
 				i, v.Description, want, got)
 		}

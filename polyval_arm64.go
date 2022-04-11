@@ -22,6 +22,9 @@ func polymul(acc, key *fieldElement) {
 }
 
 func polymulBlocks(acc *fieldElement, pow *[8]fieldElement, blocks []byte) {
+	if len(blocks) == 0 {
+		return
+	}
 	if haveAsm {
 		if haveSHA3 {
 			polymulBlocksAsmSHA3(acc, pow, &blocks[0], len(blocks)/16)
