@@ -17,6 +17,9 @@ func polymul(acc, key *fieldElement) {
 }
 
 func polymulBlocks(acc *fieldElement, pow *[8]fieldElement, blocks []byte) {
+	if len(blocks) == 0 {
+		return
+	}
 	if haveAsm {
 		polymulBlocksAsm(acc, pow, &blocks[0], len(blocks)/16)
 	} else {

@@ -17,6 +17,21 @@ import (
 
 //go:generate go run github.com/ericlagergren/polyval/internal/cmd/gen ctmul
 
+const (
+	// Size is the size in bytes of a POLYVAL checksum.
+	Size = 16
+)
+
+// Sum returns the POLYVAL hash of data.
+func Sum(key, data []byte) [Size]byte {
+	var p Polyval
+	if err := p.Init(key); err != nil {
+		panic(err)
+	}
+	p.Update(data)
+	return *(*[Size]byte)(p.Sum(nil))
+}
+
 // Polyval is an implementation of POLYVAL.
 //
 // It operates similar to the standard library's Hash interface,
@@ -53,31 +68,39 @@ var (
 
 // New creates a Polyval.
 //
-// The key must be exactly 16 bytes long.
-//
-// A zero key is invalid.
+// The key must be exactly 16 bytes long and cannot be all zero.
 func New(key []byte) (*Polyval, error) {
+	var p Polyval
+	if err := p.Init(key); err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+// Init initializes a Polyval.
+//
+// The key must be exactly 16 bytes long and cannot be all zero.
+func (p *Polyval) Init(key []byte) error {
 	if len(key) != 16 {
-		return nil, fmt.Errorf("invalid key size: %d", len(key))
+		return fmt.Errorf("invalid key size: %d", len(key))
 	}
 	var zeroKey [16]byte
 	if subtle.ConstantTimeCompare(key, zeroKey[:]) == 1 {
-		return nil, errors.New("the zero key is invalid")
+		return errors.New("the zero key is invalid")
 	}
 
-	var p Polyval
 	p.h.setBytes(key)
 	p.pow[len(p.pow)-1] = p.h
 	for i := len(p.pow) - 2; i >= 0; i-- {
 		p.pow[i] = p.h
 		polymul(&p.pow[i], &p.pow[i+1])
 	}
-	return &p, nil
+	return nil
 }
 
 // Size returns the size of a POLYVAL digest.
 func (p *Polyval) Size() int {
-	return 16
+	return Size
 }
 
 // BlockSize returns the size of a POLYVAL block.
@@ -105,7 +128,7 @@ func (p *Polyval) Update(blocks []byte) {
 //
 // It does not change the underlying hash state.
 func (p *Polyval) Sum(b []byte) []byte {
-	buf := make([]byte, 16)
+	buf := make([]byte, Size)
 	binary.LittleEndian.PutUint64(buf[0:8], p.y.lo)
 	binary.LittleEndian.PutUint64(buf[8:16], p.y.hi)
 	return append(b, buf...)
@@ -116,10 +139,10 @@ func (p *Polyval) Sum(b []byte) []byte {
 // It does not return an error.
 func (p *Polyval) MarshalBinary() ([]byte, error) {
 	buf := make([]byte, 16*(2+len(p.pow)))
-	binary.LittleEndian.PutUint64(buf[0:8], p.h.lo)
-	binary.LittleEndian.PutUint64(buf[8:16], p.h.hi)
-	binary.LittleEndian.PutUint64(buf[16:24], p.y.lo)
-	binary.LittleEndian.PutUint64(buf[24:32], p.y.hi)
+	binary.LittleEndian.PutUint64(buf[0:], p.h.lo)
+	binary.LittleEndian.PutUint64(buf[8:], p.h.hi)
+	binary.LittleEndian.PutUint64(buf[16:], p.y.lo)
+	binary.LittleEndian.PutUint64(buf[24:], p.y.hi)
 	for i, x := range p.pow {
 		binary.LittleEndian.PutUint64(buf[32+(i*16):], x.lo)
 		binary.LittleEndian.PutUint64(buf[40+(i*16):], x.hi)
@@ -129,7 +152,7 @@ func (p *Polyval) MarshalBinary() ([]byte, error) {
 
 // Unmarshalbinary implements BinaryUnmarshaler.
 //
-// data must be exactly 32 bytes.
+// data must be exactly 160 bytes.
 func (p *Polyval) UnmarshalBinary(data []byte) error {
 	if len(data) != 16*(2+len(p.pow)) {
 		return fmt.Errorf("invalid data size: %d", len(data))
