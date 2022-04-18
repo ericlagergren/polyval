@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -432,60 +433,51 @@ func BenchmarkDouble(b *testing.B) {
 	elemSink = x
 }
 
-func BenchmarkPolyval_1(b *testing.B) {
-	benchmarkPolyval(b, 1)
+var benchBlocks = []int{
+	1,   // 16
+	4,   // 64
+	8,   // 128
+	16,  // 256
+	32,  // 512
+	64,  // 2048
+	128, // 4096
+	512, // 8192
 }
 
-func BenchmarkPolyval_4(b *testing.B) {
-	benchmarkPolyval(b, 4)
-}
-
-func BenchmarkPolyval_8(b *testing.B) {
-	benchmarkPolyval(b, 8)
-}
-
-func BenchmarkPolyval_16(b *testing.B) {
-	benchmarkPolyval(b, 16)
-}
-
-func BenchmarkPolyval_32(b *testing.B) {
-	benchmarkPolyval(b, 32)
-}
-
-func BenchmarkPolyval_64(b *testing.B) {
-	benchmarkPolyval(b, 64)
+func BenchmarkPolyval(b *testing.B) {
+	for _, n := range benchBlocks {
+		b.Run(fmt.Sprintf("%d", n*16), func(b *testing.B) {
+			benchmarkPolyval(b, n)
+		})
+	}
 }
 
 func benchmarkPolyval(b *testing.B, nblocks int) {
 	b.SetBytes(int64(nblocks) * 16)
 	p, _ := New(unhex("01000000000000000000000000000000"))
 	x := make([]byte, nblocks*p.BlockSize())
+	b.ResetTimer()
+
 	for i := 0; i < b.N; i++ {
 		p.Update(x)
 	}
 	byteSink = p.Sum(nil)
 }
 
-func BenchmarkPolyvalGeneric_1(b *testing.B) {
-	benchmarkPolyvalGeneric(b, 1)
-}
-
-func BenchmarkPolyvalGeneric_4(b *testing.B) {
-	benchmarkPolyvalGeneric(b, 4)
-}
-
-func BenchmarkPolyvalGeneric_8(b *testing.B) {
-	benchmarkPolyvalGeneric(b, 8)
-}
-
-func BenchmarkPolyvalGeneric_16(b *testing.B) {
-	benchmarkPolyvalGeneric(b, 16)
+func BenchmarkPolyvalGeneric(b *testing.B) {
+	for _, n := range benchBlocks {
+		b.Run(fmt.Sprintf("%d", n*16), func(b *testing.B) {
+			benchmarkPolyvalGeneric(b, n)
+		})
+	}
 }
 
 func benchmarkPolyvalGeneric(b *testing.B, nblocks int) {
 	p, _ := New(unhex("01000000000000000000000000000000"))
 	x := make([]byte, nblocks*p.BlockSize())
 	b.SetBytes(int64(len(x)))
+	b.ResetTimer()
+
 	for i := 0; i < b.N; i++ {
 		polymulBlocksGeneric(&p.y, &p.pow, x)
 	}
