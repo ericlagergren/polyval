@@ -274,21 +274,3 @@ func (z *fieldElement) setBytes(p []byte) {
 	z.lo = binary.LittleEndian.Uint64(p[0:8])
 	z.hi = binary.LittleEndian.Uint64(p[8:16])
 }
-
-// mulx doubles x in GF(2^128).
-func (x fieldElement) double() fieldElement {
-	// h := x >> 127
-	h := x.hi >> (127 - 64)
-
-	// x <<= 1
-	hi := x.hi<<1 | x.lo>>(64-1)
-	lo := x.lo << 1
-
-	// v ^= h ^ (h << 127) ^ (h << 126) ^ (h << 121)
-	lo ^= h
-	hi ^= h << (127 - 64) // h << 127
-	hi ^= h << (126 - 64) // h << 126
-	hi ^= h << (121 - 64) // h << 121
-
-	return fieldElement{hi: hi, lo: lo}
-}

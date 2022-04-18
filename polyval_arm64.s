@@ -8,11 +8,19 @@
 //
 // For a slightly easier to read example using intrinsics,
 // see https://gist.github.com/ericlagergren/7a0af12f0d6f5e31ffffbe3e634c3944
-// and the corresponding Compiler Explorer output https://godbolt.org/z/s7d3MfE1G
+// and the corresponding Compiler Explorer output
+// https://godbolt.org/z/s7d3MfE1G
 //
-// See also Google's implementation
-// https://github.com/google/hctr2/blob/2a80dc7f742127b1f68f02b310975ac7928ae25e/benchmark/src/aarch64/polyval-pmull_asm.S
-// which includes support for multiple blocks.
+// Per https://dougallj.github.io/applecpu/firestorm.html, the M1
+// chip will fuse PMULL + VEOR if it has one of the following
+// patterns:
+//
+//          GNU    Go
+//    PMULL ABC -> CBA
+//    VEOR  AAD -> DAA
+//
+//    PMULL ABC -> CBA
+//    VEOR  ADA -> ADA
 
 #define H V0
 #define L V1
@@ -49,8 +57,8 @@
 //
 #define KARATSUBA_1(x, y) \
 	VEXT    $8, y.B16, x.B16, tmp0.B16 \
-	VEOR    x.B16, tmp0.B16, tmp0.B16  \
 	VEXT    $8, y.B16, y.B16, tmp1.B16 \
+	VEOR    x.B16, tmp0.B16, tmp0.B16  \
 	VEOR    y.B16, tmp1.B16, tmp1.B16  \
 	VPMULL  tmp1.D1, tmp0.D1, M.Q1     \
 	VPMULL2 y.D2, x.D2, H.Q1           \
@@ -64,8 +72,8 @@
 // Clobbers |x|.
 #define KARATSUBA_1_XOR(x, y) \
 	VEXT    $8, y.B16, x.B16, tmp0.B16 \
-	VEOR    x.B16, tmp0.B16, tmp0.B16  \
 	VEXT    $8, y.B16, y.B16, tmp1.B16 \
+	VEOR    x.B16, tmp0.B16, tmp0.B16  \
 	VEOR    y.B16, tmp1.B16, tmp1.B16  \
 	VPMULL  tmp1.D1, tmp0.D1, tmp0.Q1  \
 	VPMULL2 y.D2, x.D2, tmp1.Q1        \
