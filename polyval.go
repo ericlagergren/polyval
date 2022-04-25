@@ -8,11 +8,12 @@
 package polyval
 
 import (
-	"crypto/subtle"
 	"encoding"
 	"encoding/binary"
 	"errors"
 	"fmt"
+
+	"github.com/ericlagergren/polyval/internal/subtle"
 )
 
 //go:generate go run github.com/ericlagergren/polyval/internal/cmd/gen ctmul
@@ -128,10 +129,10 @@ func (p *Polyval) Update(blocks []byte) {
 //
 // It does not change the underlying hash state.
 func (p *Polyval) Sum(b []byte) []byte {
-	buf := make([]byte, Size)
-	binary.LittleEndian.PutUint64(buf[0:8], p.y.lo)
-	binary.LittleEndian.PutUint64(buf[8:16], p.y.hi)
-	return append(b, buf...)
+	ret, out := subtle.SliceForAppend(b, 16)
+	binary.LittleEndian.PutUint64(out[0:8], p.y.lo)
+	binary.LittleEndian.PutUint64(out[8:16], p.y.hi)
+	return ret
 }
 
 // MarshalBinary implements BinaryMarshaler.
