@@ -3,8 +3,9 @@ module github.com/ericlagergren/polyval
 go 1.17
 
 require (
+	github.com/ericlagergren/subtle v0.0.0-20220507045147-890d697da010
 	github.com/google/tink/go v1.6.1
-	golang.org/x/exp v0.0.0-20220128181451-c853b6ddb95e
+	golang.org/x/exp v0.0.0-20220428152302-39d4317da171
 	golang.org/x/sys v0.0.0-20220412211240-33da011f77ad
 )
 
