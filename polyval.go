@@ -13,7 +13,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ericlagergren/polyval/internal/subtle"
+	"github.com/ericlagergren/subtle"
 )
 
 //go:generate go run github.com/ericlagergren/polyval/internal/cmd/gen ctmul
@@ -85,8 +85,7 @@ func (p *Polyval) Init(key []byte) error {
 	if len(key) != 16 {
 		return fmt.Errorf("invalid key size: %d", len(key))
 	}
-	var zeroKey [16]byte
-	if subtle.ConstantTimeCompare(key, zeroKey[:]) == 1 {
+	if subtle.ConstantTimeBigEndianZero(key) == 1 {
 		return errors.New("the zero key is invalid")
 	}
 
