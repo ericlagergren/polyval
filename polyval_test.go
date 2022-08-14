@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
+	"github.com/ericlagergren/testutil"
 	"golang.org/x/exp/rand"
 )
 
@@ -261,6 +263,23 @@ func testMarshal(t *testing.T) {
 			t.Fatalf("#%d: exepected %x, got %x", i, curSum, got)
 		}
 	}
+}
+
+func TestInlining(t *testing.T) {
+	want := []string{
+		"(*Polyval).BlockSize",
+		"(*Polyval).Reset",
+		"(*Polyval).Size",
+		"(*Polyval).Update",
+		"fieldElement.String",
+		"(*Polyval).MarshalBinary",
+		"(*Polyval).Sum",
+		"(*fieldElement).setBytes",
+	}
+	if runtime.GOARCH == "amd64" {
+		want = append(want, "ctmul")
+	}
+	testutil.TestInlining(t, "github.com/ericlagergren/polyval", want...)
 }
 
 var (
